@@ -6,3 +6,4 @@ Pillow
 supabase
 python-dotenv
 gunicorn
+praw
