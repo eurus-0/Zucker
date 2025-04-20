@@ -1,0 +1,8 @@
+Flask
+Flask-Login
+Flask-SQLAlchemy
+Werkzeug
+Pillow
+supabase
+python-dotenv
+gunicorn
