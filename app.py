@@ -1,60 +1,204 @@
-import praw
-import requests
-import os
-from flask import Flask, render_template, jsonify
-from random import shuffle
-from flask import Flask, render_template, request, session, jsonify
+# app.py
 
+from flask import Flask, render_template, request, jsonify, session
+import praw
+import os
+from supabase import create_client, Client
+from werkzeug.utils import secure_filename
+import tempfile
 
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Replace with a secure one
+url = "https://lildacyodrdnjweooceh.supabase.co"
+key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpbGRhY3lvZHJkbmp3ZW9vY2VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUxNTc3OTksImV4cCI6MjA2MDczMzc5OX0.frgrbUaHja6nsLuvhgZha59_qywACAK4QAo06m7ZJFM"
+supabase: Client = create_client(url, key)
 
-# Reddit API setup
+# PRAW setup
 reddit = praw.Reddit(
     client_id='AS3u_E8Nf9o-1O8tVm5OqA',
     client_secret='7lQMajOxpEDMQ-tKDY0-XpspuF22Ew',
-    user_agent='meme_scraper/0.1 by u/yourusername'
+    user_agent='ZuckerBot'
 )
 
-SUBREDDITS = [
-    'memes', 'dankmemes', 'funny', 'wholesomememes',
-    'okbuddyretard', 'comedyheaven', 'technicallythetruth', 'me_irl'
-]
+import random
 
-def fetch_memes(limit=20):
+UPLOAD_FOLDER = os.path.join('static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_memes(limit=10, offset=0, seen_urls=set(), subreddit=None):
+    subreddits = [
+        "memes", "dankmemes", "wholesomememes", "funny", "me_irl",
+        "okbuddyretard", "bonehurtingjuice", "comedyheaven", "historymemes",
+        "prequelmemes", "terriblefacebookmemes", "surrealmemes", "2meirl4meirl"
+    ]
+    target_subs = [subreddit] if subreddit else subreddits
+
     memes = []
-    for sub in SUBREDDITS:
-        for post in reddit.subreddit(sub).hot(limit=5):
-            if post.url.endswith(('jpg', 'jpeg', 'png')):
+    print(f"Fetching memes from: {target_subs}")
+    for sub in target_subs:
+        try:
+            sr = reddit.subreddit(sub)
+            count = 0
+            for post in sr.hot(limit=limit + offset):
+                if post.stickied or not post.url.endswith(("jpg", "jpeg", "png")):
+                    continue
+                if count < offset:
+                    count += 1
+                    continue
+                if post.url in seen_urls:
+                    continue
                 memes.append({
-                    'title': post.title,
-                    'url': post.url,
-                    'subreddit': sub
+                    "title": post.title,
+                    "url": post.url,
+                    "permalink": post.permalink,
+                    "subreddit": sub
                 })
-    shuffle(memes)
-    return memes[:limit]
-
-app.secret_key = 'supersecretkey'  # Required for session to work
-
-@app.route('/like', methods=['POST'])
-def like_meme():
-    meme = request.get_json()
-    if 'liked_memes' not in session:
-        session['liked_memes'] = []
-    session['liked_memes'].append(meme)
-    session.modified = True
-    return jsonify({'status': 'success', 'liked_count': len(session['liked_memes'])})
-
-@app.route('/saved')
-def saved_memes():
-    liked_memes = session.get('liked_memes', [])
-    return render_template('saved.html', memes=liked_memes)
+                if len(memes) >= limit:
+                    break
+        except Exception as e:
+            print(f"Error loading subreddit {sub}: {e}")
+        if len(memes) >= limit:
+            break
+    print(f"Found {len(memes)} memes")
+    return memes
 
 
-@app.route('/memes')
+def get_random_memes(limit=10, seen_urls=set()):
+    subreddits = [
+        "memes", "dankmemes", "wholesomememes", "funny", "me_irl",
+        "okbuddyretard", "bonehurtingjuice", "comedyheaven", "historymemes",
+        "prequelmemes", "terriblefacebookmemes", "surrealmemes", "2meirl4meirl"
+    ]
+    memes = []
+    tried_posts = set()
+
+    while len(memes) < limit:
+        sub = random.choice(subreddits)
+        subreddit = reddit.subreddit(sub)
+        post = random.choice(list(subreddit.hot(limit=50)))
+
+        if post.stickied or not post.url.endswith(("jpg", "jpeg", "png")):
+            continue
+        if post.url in seen_urls or post.id in tried_posts:
+            continue
+
+        memes.append({
+            "title": post.title,
+            "url": post.url,
+            "permalink": post.permalink,
+            "subreddit": sub
+        })
+        tried_posts.add(post.id)
+
+    return memes
+
+
+
+from flask import session
+
+@app.route("/memes")
 def memes():
-    memes = fetch_memes()
-    return render_template('memes.html', memes=memes)
+    page = int(request.args.get("page", 1))
+    limit = 10
+    offset = (page - 1) * limit
+    subreddit = request.args.get("subreddit")
 
-if __name__ == '__main__':
+    # Only use seen_urls for general/random feed
+    seen_urls = set(session.get("seen_urls", [])) if not subreddit else set()
+
+    reddit_memes = get_memes(limit=limit, offset=offset, seen_urls=seen_urls, subreddit=subreddit)
+
+    if not subreddit:
+        # Update session seen_urls for general feed
+        new_urls = [meme["url"] for meme in reddit_memes]
+        seen_urls.update(new_urls)
+        session["seen_urls"] = list(seen_urls)
+
+    # Combine with uploaded memes if needed
+    combined = reddit_memes
+
+    if request.args.get("ajax"):
+        return jsonify(combined)
+
+    return render_template("memes.html", memes=combined, selected_subreddit=subreddit)
+
+
+
+
+
+@app.route("/upload", methods=["GET", "POST"])
+def upload():
+    if request.method == "POST":
+        file = request.files["file"]
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                file.save(tmp.name)
+                tmp_path = tmp.name
+
+            supabase.storage.from_('memes').upload(filename, tmp_path)
+            public_url = supabase.storage.from_('memes').get_public_url(filename)
+
+            # Optional: ask user for a title
+            title = request.form.get("title", "")
+
+            # Save metadata to Supabase DB
+            supabase.table("uploaded_memes").insert({
+                "url": public_url,
+                "title": title
+            }).execute()
+
+            return render_template("upload.html", success=True, image_url=public_url)
+
+    return render_template("upload.html", success=False)
+
+
+@app.route("/save-meme", methods=["POST"])
+def save_meme():
+    data = request.get_json()
+    title = data.get("title", "")
+    url = data.get("url")
+    permalink = data.get("permalink", "#")
+    subreddit = data.get("subreddit", "unknown")
+
+    if url:
+        # Avoid duplicates by checking if meme already exists
+        existing = supabase.table("saved_memes").select("id").eq("url", url).execute()
+        if existing.data:
+            return jsonify({"message": "Already saved."})
+
+        # Save meme
+        supabase.table("saved_memes").insert({
+            "title": title,
+            "url": url,
+            "permalink": permalink,
+            "subreddit": subreddit
+        }).execute()
+        return jsonify({"message": "Meme saved!"})
+    
+    return jsonify({"error": "Missing URL"}), 400
+
+
+@app.route("/saved")
+def saved():
+    response = supabase.table("saved_memes").select("*").order("id", desc=True).execute()
+    memes = response.data if response.data else []
+    return render_template("saved.html", memes=memes)
+
+    
+
+
+
+
+if __name__ == "__main__":
     app.run(debug=True)
+
