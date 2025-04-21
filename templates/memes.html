@@ -34,6 +34,7 @@
       display: flex;
       flex-direction: column;
       min-height: 100vh;
+      overflow: hidden;
     }
 
     header {
@@ -65,73 +66,56 @@
     }
 
     #meme-container {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  padding-bottom: 140px; /* leaves space for buttons */
-  position: relative;
-  overflow: hidden;
-}
-
-
-
-.meme-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  padding: 16px;
-  width: 90%;
-  max-width: 400px;
-  text-align: center;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-  position: absolute;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-}
-
-
-.meme-card img {
-  width: 100%;
-  height: auto;
-  max-height: 60vh; /* Let it fill vertically but leave room for title/text */
-  object-fit: contain;
-  border-radius: 12px;
-}
-
-
-    .buttons {
-  position: fixed;
-  bottom: 20px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  padding: 0 20px;
-  flex-wrap: wrap;
-  z-index: 100;
-  background: var(--bg);
-}
-
-
-    button {
-      padding: 10px 18px;
-      font-weight: 600;
-      border-radius: 30px;
-      font-size: 16px;
-      background: var(--btn-bg);
-      color: var(--btn-text);
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
     }
 
-    button:hover {
-      opacity: 0.9;
+    .meme-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      padding: 16px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 70vh;
+      text-align: center;
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .meme-card h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      line-height: 1.4;
+      overflow-wrap: break-word;
+      max-height: 20%;
+      overflow-y: auto;
+    }
+
+    .meme-card p {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #aaa;
+      max-height: 10%;
+      overflow-y: auto;
+    }
+
+    .meme-card img,
+    .meme-card video {
+      width: 100%;
+      max-height: 50vh;
+      object-fit: contain;
+      border-radius: 12px;
+      flex-shrink: 0;
     }
 
     a {
@@ -148,191 +132,210 @@
       font-size: 14px;
       color: #888;
     }
-
-    @media (max-width: 600px) {
-      .meme-card {
-        max-width: 90%;
-      }
-
-      .buttons {
-        gap: 8px;
-        flex-direction: column;
-      }
-
-      button {
-        width: 100%;
-      }
-    }
   </style>
 </head>
 <body>
 
-  <header>
-    Zucker
-    <button id="theme-toggle">🌙</button>
-  </header>
+<header>
+  Zucker
+  <button id="theme-toggle">🌙</button>
+</header>
 
-  <form method="get" action="/memes">
-    <select name="subreddit" onchange="this.form.submit()">
-      <option value="">All Categories</option>
-      {% for sub in [
-        "memes", "dankmemes", "wholesomememes", "funny", "me_irl",
-        "okbuddyretard", "bonehurtingjuice", "comedyheaven", "historymemes",
-        "prequelmemes", "terriblefacebookmemes", "surrealmemes", "2meirl4meirl"
-      ] %}
-        <option value="{{ sub }}" {% if selected_subreddit == sub %}selected{% endif %}>r/{{ sub }}</option>
-      {% endfor %}
-    </select>
-  </form>
+<form method="get" action="/memes">
+  <select name="subreddit" onchange="this.form.submit()">
+    <option value="">All Categories</option>
+    {% for sub in [
+      "memes", "dankmemes", "wholesomememes", "funny", "me_irl",
+      "okbuddyretard", "bonehurtingjuice", "comedyheaven", "historymemes",
+      "prequelmemes", "terriblefacebookmemes", "surrealmemes", "2meirl4meirl"
+    ] %}
+      <option value="{{ sub }}" {% if selected_subreddit == sub %}selected{% endif %}>r/{{ sub }}</option>
+    {% endfor %}
+  </select>
+</form>
 
-  <div id="meme-container">
-    <h2>Loading meme...</h2>
-  </div>
+<div id="meme-container">
+  <h2>Loading meme...</h2>
+</div>
 
-  <div id="meme-count"></div>
-  <div id="feedback"></div>
+<div id="meme-count"></div>
+<div id="feedback"></div>
 
-  <div class="buttons">
-    <button onclick="swipe('left')">❌ Skip</button>
-    <button onclick="swipe('right')">✅ Like</button>
-    <button onclick="shareMeme()">📤 Share</button>
-  </div>
+<a href="/memes?random=1">🎲 Random Mode</a>
+<a href="/saved">❤️ View Saved Memes</a>
 
-  <a href="/memes?random=1">🎲 Random Mode</a>
-  <a href="/saved">❤️ View Saved Memes</a>
-  <div id="loading"></div>
+<script>
+  let memes = {{ memes | tojson }};
+  let index = 0;
+  let startX = null;
+  let page = 1;
+  let loading = false;
+  let subreddit = "{{ selected_subreddit or '' }}";
 
-  <script>
-    let memes = {{ memes | tojson }};
-    let index = 0;
-    let page = 1;
-    let loading = false;
-    let subreddit = "{{ selected_subreddit or '' }}";
+  const container = document.getElementById("meme-container");
+  const memeCountEl = document.getElementById("meme-count");
+  const feedbackEl = document.getElementById("feedback");
 
-    const container = document.getElementById("meme-container");
-    const memeCountEl = document.getElementById("meme-count");
-    const feedbackEl = document.getElementById("feedback");
-
-    function showMeme() {
-      if (index >= memes.length) {
-        loadMoreMemes();
-        return;
-      }
-
-      const meme = memes[index];
-      const card = document.createElement('div');
-      card.className = 'meme-card';
-      card.innerHTML = `
-        <h3>${meme.title}</h3>
-        <img src="${meme.url}" alt="Meme">
-        <p>From r/${meme.subreddit || 'unknown'}</p>
-      `;
-
-      container.innerHTML = '';
-      container.appendChild(card);
-      memeCountEl.innerText = `Meme ${index + 1} of ${memes.length}`;
-      feedbackEl.innerText = '';
+  function showMeme() {
+    if (!memes || memes.length === 0) {
+      container.innerHTML = "<h2>No memes found 😭</h2>";
+      return;
     }
 
-    function swipe(direction) {
-      const card = document.querySelector('.meme-card');
-      if (!card) return;
-
-      card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-      card.style.transform = direction === 'right' ? 'translateX(100vw)' : 'translateX(-100vw)';
-      card.style.opacity = 0;
-
-      if (direction === 'right') {
-        const meme = memes[index];
-        fetch('/like', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(meme)
-        });
-        feedbackEl.innerText = 'You liked this meme! ✅';
-      }
-
-      setTimeout(() => {
-        index++;
-        showMeme();
-      }, 300);
+    if (index >= memes.length) {
+      loadMoreMemes();
+      return;
     }
 
-    function loadMoreMemes() {
-      if (loading) return;
-      loading = true;
-      page++;
+    const meme = memes[index];
+    const card = document.createElement('div');
+    card.className = 'meme-card';
 
-      let url = `/memes?page=${page}&ajax=1`;
-      if (subreddit) url += `&subreddit=${subreddit}`;
+    const media = meme.is_video
+      ? `<video src="${meme.url}" controls autoplay muted loop></video>`
+      : `<img src="${meme.url}" alt="Meme">`;
 
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          if (data.length > 0) {
-            memes = memes.concat(data);
-            showMeme();
-          } else {
-            container.innerHTML = "<h2>No more memes 😭</h2>";
-          }
-          loading = false;
-        });
-    }
+    card.innerHTML = `
+      <h3>${meme.title}</h3>
+      ${media}
+      <p>From r/${meme.subreddit || 'unknown'}</p>
+    `;
 
-    function shareMeme() {
-      const meme = memes[index];
+    card.addEventListener('contextmenu', e => {
+      e.preventDefault();
       navigator.clipboard.writeText(meme.url)
-        .then(() => feedbackEl.innerText = "✅ Meme link copied to clipboard!")
-        .catch(() => feedbackEl.innerText = "❌ Failed to copy meme link.");
-    }
-
-    // Touch swipe support
-    let startX = 0;
-    let activeCard = null;
-
-    document.addEventListener('touchstart', e => {
-      activeCard = document.querySelector('.meme-card');
-      startX = e.touches[0].clientX;
-    }, { passive: true });
-
-    document.addEventListener('touchmove', e => {
-      if (!activeCard) return;
-      const deltaX = e.touches[0].clientX - startX;
-      activeCard.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.05}deg)`;
-    }, { passive: true });
-
-    document.addEventListener('touchend', e => {
-      if (!activeCard) return;
-      const deltaX = e.changedTouches[0].clientX - startX;
-      const threshold = 80;
-
-      if (Math.abs(deltaX) > threshold) {
-        swipe(deltaX > 0 ? 'right' : 'left');
-      } else {
-        activeCard.style.transform = 'translateX(0)';
-      }
-
-      activeCard = null;
+        .then(() => feedbackEl.innerText = "✅ Meme link copied!")
+        .catch(() => feedbackEl.innerText = "❌ Failed to copy.");
     });
 
-    // Theme toggle
-    const toggle = document.getElementById('theme-toggle');
+    container.innerHTML = '';
+    container.appendChild(card);
+    memeCountEl.innerText = `Meme ${index + 1} of ${memes.length}`;
+    feedbackEl.innerText = '';
+  }
 
-    function setTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('theme', theme);
-      toggle.textContent = theme === 'light' ? '🌙' : '☀️';
+  function swipe(direction) {
+    const card = document.querySelector('.meme-card');
+    if (!card) return;
+
+    card.style.transition = 'transform 0.35s ease-out, opacity 0.35s ease-out';
+    card.style.transform = direction === 'right'
+      ? 'translateX(100vw) rotate(10deg)'
+      : 'translateX(-100vw) rotate(-10deg)';
+    card.style.opacity = 0;
+
+    if (direction === 'right') {
+      const meme = memes[index];
+      fetch('/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(meme)
+      });
+      feedbackEl.innerText = 'You liked this meme! ✅';
     }
 
-    toggle.addEventListener('click', () => {
-      const current = document.documentElement.getAttribute('data-theme') || 'dark';
-      setTheme(current === 'dark' ? 'light' : 'dark');
-    });
-
-    window.onload = () => {
-      setTheme(localStorage.getItem('theme') || 'dark');
+    setTimeout(() => {
+      index++;
       showMeme();
+    }, 350);
+  }
+
+  function loadMoreMemes() {
+    if (loading) return;
+    loading = true;
+    page++;
+
+    let url = `/memes?page=${page}&ajax=1`;
+    if (subreddit) url += `&subreddit=${subreddit}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.length > 0) {
+          memes = memes.concat(data);
+          showMeme();
+        } else {
+          container.innerHTML = "<h2>No more memes 😭</h2>";
+        }
+        loading = false;
+      });
+  }
+
+  const toggle = document.getElementById('theme-toggle');
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    toggle.textContent = theme === 'light' ? '🌙' : '☀️';
+  }
+
+  toggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  // Smooth swipe listeners
+  let activeCard = null;
+  let dragging = false;
+
+  container.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    activeCard = document.querySelector('.meme-card');
+  }, { passive: true });
+
+  container.addEventListener('touchmove', e => {
+    if (!activeCard) return;
+    const deltaX = e.touches[0].clientX - startX;
+    activeCard.style.transition = 'none';
+    activeCard.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.05}deg)`;
+  }, { passive: true });
+
+  container.addEventListener('touchend', e => {
+    if (!activeCard) return;
+    const deltaX = e.changedTouches[0].clientX - startX;
+    if (deltaX > 80) swipe('right');
+    else if (deltaX < -80) swipe('left');
+    else {
+      activeCard.style.transition = 'transform 0.3s ease';
+      activeCard.style.transform = 'translateX(0)';
     }
-  </script>
+    activeCard = null;
+  });
+
+  container.addEventListener('mousedown', e => {
+    startX = e.clientX;
+    activeCard = document.querySelector('.meme-card');
+    dragging = true;
+  });
+
+  container.addEventListener('mousemove', e => {
+    if (!dragging || !activeCard) return;
+    const deltaX = e.clientX - startX;
+    activeCard.style.transition = 'none';
+    activeCard.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.05}deg)`;
+  });
+
+  container.addEventListener('mouseup', e => {
+    if (!dragging || !activeCard) return;
+    const deltaX = e.clientX - startX;
+    dragging = false;
+
+    if (deltaX > 80) swipe('right');
+    else if (deltaX < -80) swipe('left');
+    else {
+      activeCard.style.transition = 'transform 0.3s ease';
+      activeCard.style.transform = 'translateX(0)';
+    }
+
+    activeCard = null;
+  });
+
+  window.onload = () => {
+    setTheme(localStorage.getItem('theme') || 'dark');
+    index = 0;
+    showMeme();
+  };
+</script>
+
 </body>
 </html>

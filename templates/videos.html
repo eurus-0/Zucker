@@ -1,0 +1,98 @@
+<!-- videos.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zucker | Video Memes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #121212;
+      color: #fff;
+    }
+
+    header {
+      padding: 16px;
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      background: #1e1e1e;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+      background: #1e1e1e;
+    }
+
+    a.button {
+      padding: 8px 14px;
+      border-radius: 6px;
+      background: #fff;
+      color: #000;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .video-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    .video-card {
+      background: #2a2a2a;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
+    video {
+      width: 100%;
+      border-radius: 10px;
+      max-height: 60vh;
+      object-fit: contain;
+    }
+
+    h3 {
+      margin: 10px 0 5px;
+    }
+
+    .meme-sub {
+      color: #aaa;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>Zucker</header>
+
+  <div class="top-bar">
+    <a href="/memes" class="button">🖼️ Memes</a>
+  </div>
+
+  <div class="video-feed" id="video-feed">
+    {% for meme in memes %}
+      {% if meme.url.endswith('.mp4') %}
+        <div class="video-card">
+          <h3>{{ meme.title }}</h3>
+          <video controls preload="metadata">
+            <source src="{{ meme.url }}" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+          <p class="meme-sub">From r/{{ meme.subreddit }}</p>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+</body>
+</html>

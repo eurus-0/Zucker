@@ -6,6 +6,9 @@ import os
 from supabase import create_client, Client
 from werkzeug.utils import secure_filename
 import tempfile
+import requests
+from flask import Flask, render_template, request, jsonify
+from fetch import get_memes_from_reddit  # use correct filename
 
 
 app = Flask(__name__)
@@ -28,6 +31,27 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+def fetch_memes(subreddit=None, limit=20):
+    url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit={limit}" if subreddit else f"https://www.reddit.com/r/memes+funny+wholesomememes/hot.json?limit={limit}"
+    headers = {'User-agent': 'MemeApp 1.0'}
+    res = requests.get(url, headers=headers)
+    posts = res.json()["data"]["children"]
+
+    memes = []
+    for post in posts:
+        data = post["data"]
+        if not data.get("url"):
+            continue
+        url = data["url"]
+        if any(url.endswith(ext) for ext in [".jpg", ".png", ".gif", ".jpeg", ".mp4"]):
+            memes.append({
+                "title": data["title"],
+                "url": url,
+                "subreddit": data["subreddit"],
+                "is_video": url.endswith('.mp4') or data.get("is_video") is True
+            })
+    return memes
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -106,29 +130,33 @@ from flask import session
 
 @app.route("/memes")
 def memes():
-    page = int(request.args.get("page", 1))
-    limit = 10
-    offset = (page - 1) * limit
     subreddit = request.args.get("subreddit")
+    page = int(request.args.get("page", 1))
+    ajax = request.args.get("ajax")
 
-    # Only use seen_urls for general/random feed
-    seen_urls = set(session.get("seen_urls", [])) if not subreddit else set()
+    # Initialize session['seen_urls'] if not already set
+    if "seen_urls" not in session:
+        session["seen_urls"] = []
+
+    seen_urls = set(session["seen_urls"])
+
+    # Pagination via offset
+    limit = 20
+    offset = (page - 1) * limit
 
     reddit_memes = get_memes(limit=limit, offset=offset, seen_urls=seen_urls, subreddit=subreddit)
+    print("Fetched memes:", len(reddit_memes))
 
-    if not subreddit:
-        # Update session seen_urls for general feed
-        new_urls = [meme["url"] for meme in reddit_memes]
-        seen_urls.update(new_urls)
-        session["seen_urls"] = list(seen_urls)
+    # Add new meme URLs to session seen list to avoid duplicates
+    new_urls = [m["url"] for m in reddit_memes]
+    seen_urls.update(new_urls)
+    session["seen_urls"] = list(seen_urls)
 
-    # Combine with uploaded memes if needed
-    combined = reddit_memes
+    if ajax:
+        return jsonify(reddit_memes)
 
-    if request.args.get("ajax"):
-        return jsonify(combined)
+    return render_template("memes.html", memes=reddit_memes, selected_subreddit=subreddit)
 
-    return render_template("memes.html", memes=combined, selected_subreddit=subreddit)
 
 
 
